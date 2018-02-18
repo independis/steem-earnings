@@ -1,125 +1,8 @@
 var fs = require('fs');
 var Promise = require('bluebird');
 global.fetch = require('node-fetch');
-var steem = require('steem');
-steem.api.setOptions({ url: 'https://api.steemit.com' });
-
-function BlobStorage() {
-	var self = this;
-
-	self.storageData = {};
-
-	self.setItem = function(pKey, pData) {
-		self.storageData[pKey] = pData;
-	}
-
-	self.getItem = function(pKey) {
-		return self.storageData[pKey];
-	}
-
-	self.removeItem = function(pKey) {
-		delete self.storageData[pKey];
-	}
-}
-
-function SteemAccountHistoryHelper(pAccount, pStorage) {
-	var self = this;
-
-	self.account = pAccount;
-
-	var storage = pStorage;
-	var storageKey = 'steemit-accountHistory-' + pAccount;
-	var maxItemCount = 0;
-
-	function getFromStorage() {
-		var storageData = storage.getItem(storageKey);
-		if (storageData === undefined || storageData === null) {
-			storageData = { account: pAccount, account_history: [] };
-		} else {
-			storageData = JSON.parse(storageData);
-		}
-		return storageData;
-	}
-
-	function writeToStorage(pStorageData) {
-		storage.setItem(storageKey, JSON.stringify(pStorageData));
-	}
-
-	self.clearCache = function() {
-		storage.removeItem(storageKey);
-	}
-
-	self.updateAccountHistoryAsync = function() {
-			return new Promise((resolve, reject) => {
-				try {
-					var from = -1;
-					var limit = 1000;
-					var storageData = getFromStorage();
-					doGetAccountHistoryRecursive(self.account, from, limit, storageData.account_history.length-1, storageData.account_history, (err,result) => {
-						if (result) {
-							writeToStorage(storageData);
-						}
-						resolve(result);
-					});
-				} catch (error) {
-					reject(error);
-				}
-		
-			})
-	}
-
-	function doGetAccountHistoryRecursive(pAccount, pFrom, pLimit, pUpdateToIndex, pDataArray, pFnCallback) {
-		var progressValue = 0;
-		console.log( 'requesting data for @' + pAccount + ' (' + pFrom + '/' + pLimit + ')');
-		if (pFrom == -1) {
-			progressValue = 0; 
-		} else if (pFrom <= pLimit) {
-			progressValue = 100;
-		} else {
-			progressValue = parseInt(((maxItemCount-pFrom)*100)/maxItemCount);
-		}
-		steem.api.getAccountHistory(pAccount, pFrom, pLimit, function(err,result){
-			if (err){
-				console.error( JSON.stringify(err));
-				pFnCallback(err, null);
-				return;
-			}
-			if (result) {
-				var lastIndex = -1;
-				for (let index = 0; index < result.length; index++) {
-					const element = result[index];
-					const currentIndex = element[0];
-					if (currentIndex > maxItemCount) maxItemCount = currentIndex;
-					if (lastIndex === -1 || lastIndex > currentIndex) lastIndex = currentIndex;
-					if (pDataArray[currentIndex] === undefined) {
-						pDataArray[currentIndex] = element;
-					}
-				}
-				if (lastIndex > 0 && lastIndex > pUpdateToIndex) {
-					doGetAccountHistoryRecursive(pAccount, lastIndex, pLimit > lastIndex ? lastIndex : pLimit, pUpdateToIndex, pDataArray, pFnCallback)
-				} else {
-					// finished
-					pFnCallback(null, pDataArray);
-				}
-			}
-		} );   
-	}
-
-	self.getClaims = function() {
-		var resultData = [];
-		var storageData = getFromStorage();
-		for (let index = 0; index < storageData.account_history.length; index++) {
-			const element = storageData.account_history[index];
-			var op = element[1] !== undefined ? element[1].op : null;
-			if (op !== null) {
-				if (op.length > 0 && (op[0] === 'claim_reward_balance' || op[0] === 'transfer')) {
-					resultData.push(element);
-				}
-			}
-		}
-		return resultData;
-	}
-}
+var SteemAccountHistory = require('./lib/steem-account-history.js');
+var SteemdApiProps = require('./lib/steemd-api-props.js');
 
 function getFloatValue(pValue, pFactor) {
 	if (pValue === undefined || pValue === null || pValue === '') return null;
@@ -130,9 +13,31 @@ function getFloatValue(pValue, pFactor) {
 	return null;
 }
 
-function getAccountValue(pSteemAccountHistoryHelper) {
+
+function createPreparedDataObject(pIndex, pTimestamp, pOpType, pRewardSteem, pRewardSbd, pRewardVests, pObject, pSteemdApiProps) {
+	// create new object
+	var timestamp = new Date(pTimestamp);
+	var preparedDataObject = {
+		index: pIndex,
+		timestamp: pTimestamp,
+		op_type: pOpType,
+		reward_steem: pRewardSteem,
+		reward_sbd: pRewardSbd,
+		reward_vests: pRewardVests,
+		reward_sp: null,
+		steem_per_mvests: pSteemdApiProps.getSteemPerMVestForDate(timestamp),
+		object: pObject
+	};
+	// calculate SP value
+	if (preparedDataObject.reward_vests !== null && preparedDataObject.steem_per_mvests != null) {
+		preparedDataObject.reward_sp = preparedDataObject.reward_vests * preparedDataObject.steem_per_mvests / 1000000;
+	}
+	return preparedDataObject;
+}
+
+function getAccountValue(pSteemAccountHistory, pSteemdApiProps) {
 	try {
-		var claims = pSteemAccountHistoryHelper.getClaims();
+		var claims = pSteemAccountHistory.getClaims();
 		var preparedData = {};
 		for (let index = 0; index < claims.length; index++) {
 			var claim = claims[index];
@@ -140,27 +45,28 @@ function getAccountValue(pSteemAccountHistoryHelper) {
 			var opType = op[0];
 			if (preparedData[opType] === undefined) preparedData[opType] = [];
 			if (opType === 'claim_reward_balance') {
-				preparedDataObject = {
-					index: claim[0],
-					timestamp: claim[1].timestamp,
-					op_type: opType,
-					reward_steem: getFloatValue(op[1].reward_steem),
-					reward_sbd: getFloatValue(op[1].reward_sbd),
-					reward_vests: getFloatValue(op[1].reward_vests),
-					object: claim[1]					
-				}
+				var preparedDataObject = createPreparedDataObject(
+					claim[0],
+					claim[1].timestamp,
+					opType,
+					getFloatValue(op[1].reward_steem),
+					getFloatValue(op[1].reward_sbd),
+					getFloatValue(op[1].reward_vests),
+					claim[1],
+					pSteemdApiProps
+				);
 				preparedData[opType].push(preparedDataObject);
 			} else if (opType === 'transfer') {
-				var factor = (op[1].from === pSteemAccountHistoryHelper.account) ? -1.0 : 1.0;
-				preparedDataObject = {
-					index: claim[0],
-					timestamp: claim[1].timestamp,
-					op_type: opType,
-					reward_steem: getFloatValue(op[1].amount != undefined && op[1].amount.indexOf('STEEM') >= 0 ? op[1].amount : '', factor),
-					reward_sbd: getFloatValue(op[1].amount != undefined && op[1].amount.indexOf('SBD') >= 0 ? op[1].amount : '', factor),
-					reward_vests: getFloatValue(op[1].amount != undefined && op[1].amount.indexOf('VESTS') >= 0 ? op[1].amount : '', factor),
-					object: claim[1]
-				}
+				var factor = (op[1].from === pSteemAccountHistory.account) ? -1.0 : 1.0;
+				var preparedDataObject = createPreparedDataObject(
+					claim[0],
+					claim[1].timestamp,
+					opType,
+					getFloatValue(op[1].amount != undefined && op[1].amount.indexOf('STEEM') >= 0 ? op[1].amount : '', factor),
+					getFloatValue(op[1].amount != undefined && op[1].amount.indexOf('SBD') >= 0 ? op[1].amount : '', factor),
+					getFloatValue(op[1].amount != undefined && op[1].amount.indexOf('VESTS') >= 0 ? op[1].amount : '', factor),
+					claim[1],
+					pSteemdApiProps);
 				preparedData[opType].push(preparedDataObject);
 			}
 		}
@@ -206,6 +112,8 @@ function createHtmlOutput(preparedData){
 				htmlFragement += '<th scope="col" class="text-right">STEEM</th>';
 				htmlFragement += '<th scope="col" class="text-right">SBD</th>';
 				htmlFragement += '<th scope="col" class="text-right">VESTS</th>';
+				htmlFragement += '<th scope="col" class="text-right">steem/mvests</th>';
+				htmlFragement += '<th scope="col" class="text-right">SP</th>';
 				htmlFragement += '<th scope="col">JSON</th>';
 				htmlFragement += '</thead>';
 				htmlFragement += '<tbody>';
@@ -235,6 +143,12 @@ function createHtmlOutput(preparedData){
 						sumValues[year].reward_vests += element.reward_vests;
 					}
 
+					htmlFragement += '<td class="text-right">' + (element.steem_per_mvests  != null ? (element.steem_per_mvests).toFixed(6) : '') + '</td>';
+					htmlFragement += '<td class="text-right bg-info">' + (element.reward_sp  != null ? element.reward_sp.toFixed(3) : '') + '</td>';
+					if (element.reward_sp != null) {
+						sumValues[year].reward_sp += element.reward_sp;
+					}
+
 					htmlFragement += '<td><a class="btn btn-primary" data-toggle="collapse" href="#collapse'+element.index+'" aria-expanded="false" aria-controls="collapseExample">'+element.op_type+'...</a></td>';
 					htmlFragement += '</tr>\n';
 					htmlFragement += '<tr class="collapse" id="collapse'+element.index+'">';
@@ -251,6 +165,8 @@ function createHtmlOutput(preparedData){
 					htmlFragement += '<td class="text-right"><strong>SBD</strong></td>';
 					htmlFragement += '<td class="text-right"><strong>VESTS</strong></td>';
 					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong>SP</strong></td>';
+					htmlFragement += '<td></td>';
 					htmlFragement += '</tr>\n';
 				var yearKeys = Object.keys(sumValues);
 				for (let index = 0; index < yearKeys.length; index++) {
@@ -261,6 +177,8 @@ function createHtmlOutput(preparedData){
 					htmlFragement += '<td class="text-right bg-info"><strong>' + sumValues[year].reward_steem.toFixed(3) + '</strong></td>';
 					htmlFragement += '<td class="text-right bg-info"><strong>' + sumValues[year].reward_sbd.toFixed(3) + '</strong></td>';
 					htmlFragement += '<td class="text-right bg-info"><strong>' + sumValues[year].reward_vests.toFixed(3) + '</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right bg-info"><strong>' + sumValues[year].reward_sp.toFixed(3) + '</strong></td>';
 					htmlFragement += '<td></td>';
 					htmlFragement += '</tr>\n';
 				}
@@ -325,12 +243,14 @@ function writeFile(pFilename, pContent) {
 }
 
 function main(pAccount) {
-	var storage = new BlobStorage();
-	var steemAccountHistoryHelper = new SteemAccountHistoryHelper(pAccount, storage);
+	var steemAccountHistory = new SteemAccountHistory(pAccount);
+	var steemdApiProps = new SteemdApiProps();
 
-	steemAccountHistoryHelper.updateAccountHistoryAsync(pAccount
-	). then(() => {
-		var accountValues = getAccountValue(steemAccountHistoryHelper);
+	steemdApiProps.loadAsync(
+	).then(() => 
+		steemAccountHistory.updateAccountHistoryAsync(pAccount)
+	).then(() => {
+		var accountValues = getAccountValue(steemAccountHistory, steemdApiProps);
 		var html = createHtmlOutput(accountValues);
 		writeFile(process.argv[1] + '-' + pAccount + '.html', html);
 		var csv = createCsvOutput(accountValues);
