@@ -9,6 +9,7 @@
   "license": "UNLICENSED",
   "dependencies": {
     "bluebird": "^3.5.1",
+    "cryptocompare-api": "^1.0.2",
     "eslint": "^4.17.0",
     "fs": "0.0.1-security",
     "node-fetch": "^2.0.0",

@@ -3,6 +3,7 @@ var Promise = require('bluebird');
 global.fetch = require('node-fetch');
 var SteemAccountHistory = require('./lib/steem-account-history.js');
 var SteemdApiProps = require('./lib/steemd-api-props.js');
+var exchangeRatesTool = require('./lib/exchange-rates-tool.js');
 
 function getFloatValue(pValue, pFactor) {
 	if (pValue === undefined || pValue === null || pValue === '') return null;
@@ -26,11 +27,52 @@ function createPreparedDataObject(pIndex, pTimestamp, pOpType, pRewardSteem, pRe
 		reward_vests: pRewardVests,
 		reward_sp: null,
 		steem_per_mvests: pSteemdApiProps.getSteemPerMVestForDate(timestamp),
+		sbd_btc_exchange: null,
+		sbd_btc: null,
 		object: pObject
 	};
 	// calculate SP value
 	if (preparedDataObject.reward_vests !== null && preparedDataObject.steem_per_mvests != null) {
 		preparedDataObject.reward_sp = preparedDataObject.reward_vests * preparedDataObject.steem_per_mvests / 1000000;
+	}
+	// get SBD BTC value
+	var dateKey = exchangeRatesTool.convertDateUtcToInt(timestamp);
+	if (preparedDataObject.reward_sbd !== null) {
+		var exchangeData = exchangeRatesTool.getExchangeRate('SBD-BTC', dateKey);
+		if (exchangeData !== null) {
+			preparedDataObject.sbd_btc_exchange = exchangeData.close;
+			preparedDataObject.sbd_btc = preparedDataObject.reward_sbd * exchangeData.close;
+		}
+	}
+	// get STEEM BTC value
+	if (preparedDataObject.reward_steem !== null) {
+		var exchangeData = exchangeRatesTool.getExchangeRate('STEEM-BTC', dateKey);
+		if (exchangeData !== null) {
+			preparedDataObject.steem_btc_exchange = exchangeData.close;
+			preparedDataObject.steem_btc = preparedDataObject.reward_steem * exchangeData.close;
+		}
+	}
+	// get STEEM BTC value
+	if (preparedDataObject.reward_sp !== null) {
+		var exchangeData = exchangeRatesTool.getExchangeRate('STEEM-BTC', dateKey);
+		if (exchangeData !== null) {
+			preparedDataObject.vests_btc_exchange = exchangeData.close;
+			preparedDataObject.vests_btc = preparedDataObject.reward_sp * exchangeData.close;
+		}
+	}
+	// get BTC EUR value
+	var exchangeData = exchangeRatesTool.getExchangeRate('BTC-EUR', dateKey);
+	if (exchangeData !== null) {
+		preparedDataObject.btc_eur_exchange = exchangeData.close;
+		if (preparedDataObject.sbd_btc !== null) {
+			preparedDataObject.sbd_eur = preparedDataObject.sbd_btc * exchangeData.close;
+		}
+		if (preparedDataObject.steem_btc !== null) {
+			preparedDataObject.steem_eur = preparedDataObject.steem_btc * exchangeData.close;
+		}
+		if (preparedDataObject.vests_btc !== null) {
+			preparedDataObject.vests_eur = preparedDataObject.vests_btc * exchangeData.close;
+		}
 	}
 	return preparedDataObject;
 }
@@ -110,10 +152,22 @@ function createHtmlOutput(preparedData){
 				htmlFragement += '<th scope="col" class="text-right">Index</th>';
 				htmlFragement += '<th scope="col" class="text-right">Timestamp</th>';
 				htmlFragement += '<th scope="col" class="text-right">STEEM</th>';
+				htmlFragement += '<th scope="col" class="text-right">STEEM/BTC</th>';
+				htmlFragement += '<th scope="col" class="text-right">STEEM BTC</th>';
+				htmlFragement += '<th scope="col" class="text-right">BTC/EUR</th>';
+				htmlFragement += '<th scope="col" class="text-right">STEEM EUR</th>';
 				htmlFragement += '<th scope="col" class="text-right">SBD</th>';
+				htmlFragement += '<th scope="col" class="text-right">SBD/BTC</th>';
+				htmlFragement += '<th scope="col" class="text-right">SBD BTC</th>';
+				htmlFragement += '<th scope="col" class="text-right">BTC/EUR</th>';
+				htmlFragement += '<th scope="col" class="text-right">SBD EUR</th>';
 				htmlFragement += '<th scope="col" class="text-right">VESTS</th>';
-				htmlFragement += '<th scope="col" class="text-right">steem/mvests</th>';
+				htmlFragement += '<th scope="col" class="text-right">Steem/mvests</th>';
 				htmlFragement += '<th scope="col" class="text-right">SP</th>';
+				htmlFragement += '<th scope="col" class="text-right">SP/BTC</th>';
+				htmlFragement += '<th scope="col" class="text-right">SP BTC</th>';
+				htmlFragement += '<th scope="col" class="text-right">BTC/EUR</th>';
+				htmlFragement += '<th scope="col" class="text-right">SP EUR</th>';
 				htmlFragement += '<th scope="col">JSON</th>';
 				htmlFragement += '</thead>';
 				htmlFragement += '<tbody>';
@@ -127,26 +181,56 @@ function createHtmlOutput(preparedData){
 					htmlFragement += '<td class="text-right">' + element.index + '</td>';
 					htmlFragement += '<td class="text-right">' + element.timestamp + '</td>';
 	
-					htmlFragement += '<td class="text-right bg-info">' + (element.reward_steem != null ? element.reward_steem.toFixed(3) : '') + '</td>';
 					if (sumValues[year] === undefined) sumValues[year] = { reward_steem: 0.0, steem_btc: 0.0, steem_eur: 0.0, reward_sbd: 0.0, sbd_btc: 0.0, sbd_eur: 0.0, reward_vests: 0.0, reward_sp: 0.0, vests_btc: 0.0, vests_eur: 0.0 };
+
+					htmlFragement += '<td class="text-right bg-info">' + (element.reward_steem != null ? element.reward_steem.toFixed(3) : '') + '</td>';
 					if (element.reward_steem != null) {
 						sumValues[year].reward_steem += element.reward_steem;
 					}
-	
+					htmlFragement += '<td class="text-right">' + (element.steem_btc_exchange != null ? element.steem_btc_exchange.toFixed(6) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.steem_btc != null ? element.steem_btc.toFixed(6) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.reward_steem != null && element.btc_eur_exchange != null ? element.btc_eur_exchange.toFixed(3) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.reward_steem != null && element.steem_eur != null ? element.steem_eur.toFixed(3) : '') + '</td>';
+					if (element.steem_btc != null) {
+						sumValues[year].steem_btc += element.steem_btc;
+					}
+					if (element.reward_steem != null && element.steem_eur != null) {
+						sumValues[year].steem_eur += element.steem_eur;
+					}
+
 					htmlFragement += '<td class="text-right bg-info">' + (element.reward_sbd  != null ? element.reward_sbd.toFixed(3) : '') + '</td>';
 					if (element.reward_sbd != null) {
 						sumValues[year].reward_sbd += element.reward_sbd;
 					}
-	
+					htmlFragement += '<td class="text-right">' + (element.reward_sbd  != null && element.sbd_btc_exchange != null ? element.sbd_btc_exchange.toFixed(6) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.reward_sbd  != null && element.sbd_btc != null ? element.sbd_btc.toFixed(6) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.reward_sbd  != null && element.btc_eur_exchange != null ? element.btc_eur_exchange.toFixed(3) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.reward_sbd  != null && element.sbd_eur != null ? element.sbd_eur.toFixed(3) : '') + '</td>';
+					if (element.reward_sbd  != null && element.sbd_btc != null) {
+						sumValues[year].sbd_btc += element.sbd_btc;
+					}
+					if (element.reward_sbd  != null && element.sbd_eur != null) {
+						sumValues[year].sbd_eur += element.sbd_eur;
+					}
+		
 					htmlFragement += '<td class="text-right bg-info">' + (element.reward_vests  != null ? element.reward_vests.toFixed(3) : '') + '</td>';
 					if (element.reward_vests != null) {
 						sumValues[year].reward_vests += element.reward_vests;
 					}
-
-					htmlFragement += '<td class="text-right">' + (element.steem_per_mvests  != null ? (element.steem_per_mvests).toFixed(6) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.reward_vests  != null && element.steem_per_mvests  != null ? (element.steem_per_mvests).toFixed(6) : '') + '</td>';
 					htmlFragement += '<td class="text-right bg-info">' + (element.reward_sp  != null ? element.reward_sp.toFixed(3) : '') + '</td>';
 					if (element.reward_sp != null) {
 						sumValues[year].reward_sp += element.reward_sp;
+					}
+					htmlFragement += '<td class="text-right">' + (element.reward_sp  != null && element.vests_btc_exchange != null ? element.vests_btc_exchange.toFixed(6) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.reward_sp  != null && element.vests_btc != null ? element.vests_btc.toFixed(6) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.reward_sp  != null && element.btc_eur_exchange != null ? element.btc_eur_exchange.toFixed(3) : '') + '</td>';
+					htmlFragement += '<td class="text-right">' + (element.reward_sp  != null && element.vests_eur != null ? element.vests_eur.toFixed(3) : '') + '</td>';
+					if (element.reward_sp  != null && element.vests_btc != null) {
+						sumValues[year].vests_btc += element.vests_btc;
+					}
+					if (element.reward_sp  != null && element.vests_eur != null) {
+						sumValues[year].vests_eur += element.vests_eur;
 					}
 
 					htmlFragement += '<td><a class="btn btn-primary" data-toggle="collapse" href="#collapse'+element.index+'" aria-expanded="false" aria-controls="collapseExample">'+element.op_type+'...</a></td>';
@@ -162,10 +246,22 @@ function createHtmlOutput(preparedData){
 					htmlFragement += '<td></td>';
 					htmlFragement += '<td class="text-right"><strong>year</strong></td>';
 					htmlFragement += '<td class="text-right"><strong>STEEM</strong></td>';
-					htmlFragement += '<td class="text-right"><strong>SBD</strong></td>';
-					htmlFragement += '<td class="text-right"><strong>VESTS</strong></td>';
 					htmlFragement += '<td></td>';
-					htmlFragement += '<td class="text-right"><strong>SP</strong></td>';
+					htmlFragement += '<td class="text-right"><strong> STEEM BTC</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong> STEEM EUR</strong></td>';
+					htmlFragement += '<td class="text-right"><strong> SBD</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong> SBD BTC</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong> SBD EUR</strong></td>';
+					htmlFragement += '<td class="text-right"><strong> VESTS</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong> SP</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong> SP BTC</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong> SP EUR</strong></td>';
 					htmlFragement += '<td></td>';
 					htmlFragement += '</tr>\n';
 				var yearKeys = Object.keys(sumValues);
@@ -175,10 +271,22 @@ function createHtmlOutput(preparedData){
 					htmlFragement += '<td></td>';
 					htmlFragement += '<td class="text-right"><strong>' + year + '</strong></td>';
 					htmlFragement += '<td class="text-right bg-info"><strong>' + sumValues[year].reward_steem.toFixed(3) + '</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong>' + sumValues[year].steem_btc.toFixed(6) + '</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong>' + sumValues[year].steem_eur.toFixed(3) + '</strong></td>';
 					htmlFragement += '<td class="text-right bg-info"><strong>' + sumValues[year].reward_sbd.toFixed(3) + '</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong>' + sumValues[year].sbd_btc.toFixed(6) + '</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong>' + sumValues[year].sbd_eur.toFixed(3) + '</strong></td>';
 					htmlFragement += '<td class="text-right bg-info"><strong>' + sumValues[year].reward_vests.toFixed(3) + '</strong></td>';
 					htmlFragement += '<td></td>';
 					htmlFragement += '<td class="text-right bg-info"><strong>' + sumValues[year].reward_sp.toFixed(3) + '</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong>' + sumValues[year].vests_btc.toFixed(6) + '</strong></td>';
+					htmlFragement += '<td></td>';
+					htmlFragement += '<td class="text-right"><strong>' + sumValues[year].vests_eur.toFixed(3) + '</strong></td>';
 					htmlFragement += '<td></td>';
 					htmlFragement += '</tr>\n';
 				}
@@ -247,6 +355,12 @@ function main(pAccount) {
 	var steemdApiProps = new SteemdApiProps();
 
 	steemdApiProps.loadAsync(
+	).then( 
+		exchangeRatesTool.loadExchangeRatesAsync("STEEM","BTC",1000)
+	).then( 
+		exchangeRatesTool.loadExchangeRatesAsync("SBD","BTC",1000)
+	).then( 
+		exchangeRatesTool.loadExchangeRatesAsync("BTC","EUR",1000)
 	).then(() => 
 		steemAccountHistory.updateAccountHistoryAsync(pAccount)
 	).then(() => {

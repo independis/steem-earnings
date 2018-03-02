@@ -8,6 +8,7 @@ For implementation I used several node packages :
 - fs: To create the output files
 - bluebird: Fully featured promises library
 - node-fetch: Brings 'window.fetch' to Node.js
+- cryptocompare-api: Get exchange rates for crypto and FIAT currencies
 
 Just execute the following command to install all required packages for the program.
 
