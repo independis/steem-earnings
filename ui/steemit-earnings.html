@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+	<title>steemit earnings</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+
+	<!-- JS -->
+	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/bluebird/latest/bluebird.min.js"></script>
+	<script src="https://cdn.steemjs.com/lib/latest/steem.min.js"></script>
+
+    <script src="../lib/shared.js"></script>
+	<script src="steem-per-mvests-data.js"></script>
+	<script>var exchangeRateData = {};</script>
+    <script src="STEEM-BTC.js"></script>
+    <script src="SBD-BTC.js"></script>
+    <script src="BTC_EUR.js"></script>
+
+	<style type="text/css">
+.table {
+	font-size:0.75rem;
+	padding:0.1rem;
+}
+.td {
+	line-height: 1;
+	padding: .3rem;
+}
+.textcontainer {    
+	display: table;
+	table-layout: fixed;
+	word-wrap: break-word;
+	width: 100%;
+  }
+  
+.textwrapper { 
+	display: table-cell; 
+  }
+	</style>
+
+	<title>steemit earnings</title>
+  </head>
+  <body class="bg-light center-block">
+    <div class="container" style="max-width:98%;">
+		<div class="row">
+			<div class="py-1 text-center">
+				<h2>Show steemit earnings of the selected steemit account</h2>
+			</div>
+		</div>
+
+		<div class="row">
+			<div class="col-8">
+					<div class="input-group">
+						<div class="input-group-prepend">
+						  <span class="input-group-text">@</span>
+						</div>
+						<input type="text" class="form-control" id="tbSteemitUsername" value="schererf" placeholder="schererf" required>
+						<div class="invalid-feedback" style="width: 100%;">
+						  Your username is required.
+						</div>
+					</div>
+			</div>
+			<div class="col-4">
+				<button class="btn btn-primary  btn-block" type="submit" onclick="doIt()">get earnings</button>
+			</div>
+		</div>
+		<br>
+		<div class="row">
+			<div class="col-12">
+				<div class="progress">
+					<div class="progress-bar" id="divProgressbar" role="progressbar" style="width: 0%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
+				</div>
+			</div>
+		</div>
+		
+		<hr>
+		<div class="row">
+			<h1>Results</h1>
+		</div>
+		<div class="row">
+			<div id="divResults"></div>
+		</div>
+	</div>
+
+    <!-- Optional JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+<script>
+
+steem.api.setOptions({ url: 'https://api.steemit.com' });
+//steem.api.setOptions({ url: 'https://gtg.steem.house:8090' });
+//steem.api.setOptions({ url: 'https://rpc.steemviz.com' });
+
+setProgressbar(50, 'SBD-BTC');
+var cryptoCompareHelper = new CryptoCompareHelper();
+cryptoCompareHelper.dailyPriceHistorical('SBD-BTC', 'SBD*', 'BTC', function(data) {
+	setProgressbar(50, 'STEEM-BTC');
+	cryptoCompareHelper.dailyPriceHistorical('STEEM-BTC', 'STEEM', 'BTC', function(data) {
+		setProgressbar(75, 'BTC-EUR');
+			cryptoCompareHelper.dailyPriceHistorical('BTC-EUR', 'BTC', 'EUR', function(data) {
+			setProgressbar(100, 'crypto echange data loaded...');
+		});
+	});
+});
+
+var storage = new BlobStorage();
+var steemAccountHistoryHelper = null;
+
+function doIt() {
+	try	{
+		var tbSteemitUsername = document.getElementById("tbSteemitUsername");
+		var pAccount = tbSteemitUsername.value;
+		var divResults = document.getElementById("divResults");
+		divResults.innerText = new Date();
+
+		// update AccountHistory
+		if (steemAccountHistoryHelper != null) {
+			steemAccountHistoryHelper.clearCache();
+		}
+		steemAccountHistoryHelper = new SteemAccountHistoryHelper(pAccount, storage);
+		steemAccountHistoryHelper.updateAccountHistory(setProgressbar, (err, result) =>{
+			if (err){
+				alert(err);
+				return;
+			} 
+			if (result) {
+				// get account value
+				var accountValues = window.shared.getAccountValue(
+					pAccount, 
+					steemAccountHistoryHelper.getClaims(), 
+					getSteemPerMVestForDate, 
+					cryptoCompareHelper.getExchangeRate);
+				doHtml(accountValues);
+				exportTableToCSV(accountValues, pAccount + ".csv");
+			}
+		});
+	} catch (error) {
+		alert(error);
+	}
+}
+
+function exportTableToCSV(accountValues, filename) {
+	try {
+		// Create and Download CSV file
+		var csv = window.shared.createCsvOutputHeader() + window.shared.createCsvOutput(accountValues);
+		downloadCSV(csv, filename);
+	} catch (error) {
+		divResults.innerText = error;
+	}
+}
+
+function doHtml(accountValues) {
+	try {
+		var htmlFragement = '';
+		var currentYear = new Date().getUTCFullYear();
+		for (var year=2016; year <= currentYear; year++) {
+			htmlFragement += '<hr>\n' + window.shared.createHtmlOutput(accountValues, year) + '\n';
+		}
+		divResults.innerHTML = htmlFragement;
+	} catch (error) {
+		divResults.innerText = error;
+	}
+}
+
+function setProgressbar(pValue, pText) {
+	if (pValue == undefined || pValue == null || pValue > 100) pValue = 100;
+	$('#divProgressbar').css('width', pValue+'%').attr('aria-valuenow', pValue);    
+	$('#divProgressbar').text(pText);
+}
+
+function getSteemPerMVestForDate(pDate) {
+	if (steemPerMVestsData.length===0) return null;
+	var nearestDiff = null;
+	var nearestSteemPerMVestsDataItem = null;
+	for (let index = 0; index < steemPerMVestsData.length; index++) {
+		const steemPerMVestsDataItem = steemPerMVestsData[index];
+		var date = new Date(steemPerMVestsDataItem.timestamp);
+		var diff = date - pDate;
+		if (diff < 0) diff = diff * (-1);
+		if (nearestDiff === null || (diff < nearestDiff)) {
+			nearestDiff = diff;
+			nearestSteemPerMVestsDataItem = steemPerMVestsDataItem;
+		}
+	}
+	if (nearestSteemPerMVestsDataItem != null) {
+		return nearestSteemPerMVestsDataItem.steem_per_mvests;
+	}
+	return null;
+}
+
+function BlobStorage() {
+	var self = this;
+
+	self.storageData = {};
+
+	self.setItem = function(pKey, pData) {
+		self.storageData[pKey] = pData;
+	}
+
+	self.getItem = function(pKey) {
+		return self.storageData[pKey];
+	}
+
+	self.removeItem = function(pKey) {
+		delete self.storageData[pKey];
+	}
+}
+
+function httpGetAsync(theUrl, callback)
+{
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.onreadystatechange = function() { 
+        if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+            callback(xmlHttp.responseText);
+    }
+    xmlHttp.open("GET", theUrl, true); // true for asynchronous 
+    xmlHttp.send(null);
+}
+
+function CryptoCompareHelper() {
+	var self = this;
+
+	self.getExchangeRate = function(pExchangeRateKey, pDateKey) {
+		if (exchangeRateData[pExchangeRateKey] === undefined) return null;
+		if (exchangeRateData[pExchangeRateKey][pDateKey] === undefined) return null;
+		return exchangeRateData[pExchangeRateKey][pDateKey];
+	}
+
+	function convertToUtcDetailedDate(pDate) {
+		if (pDate === undefined || pDate === null) pDate = new Date();
+		if (typeof pDate === 'string') pDate = new Date(pDate);
+		return detailedDate = {
+			year: pDate.getUTCFullYear(),
+			month: pDate.getUTCMonth() + 1, /* getMonth() is zero-based */
+			day: pDate.getUTCDate(),
+			hours: pDate.getUTCHours(),
+			minutes: pDate.getUTCMinutes(),
+			seconds: pDate.getUTCSeconds()
+		}
+	}
+
+	self.convertDateUtcToInt = function(pDate) {
+		var detailedDate = convertToUtcDetailedDate(pDate);
+		return detailedDate.year * 10000 + detailedDate.month * 100 + detailedDate.day;
+	}
+
+	self.dailyPriceHistorical = function(exchangeRateKey, pSymFrom, pSymTo, pFnCallback) { // all_data=True, limit=1, aggregate=1, exchange='') {
+		var url = 'https://min-api.cryptocompare.com/data/histoday?fsym='+pSymFrom.toUpperCase()+'&tsym='+pSymTo.toUpperCase()+'&limit=1&aggregate=1&allData=true';
+		httpGetAsync(url, (result) => {
+			// console.log(result);
+
+			var data = JSON.parse(result);
+			for (let index = 0; index < data.Data.length; index++) {
+				const element = data.Data[index];
+				// get date
+				var date = new Date(element.time*1000);
+				var dateKey = self.convertDateUtcToInt(date);
+				// check if date already exists
+				if (exchangeRateData[exchangeRateKey] === undefined) {
+					exchangeRateData[exchangeRateKey] = {};
+				}
+				// check if exchange source-target already exists
+				if (exchangeRateData[exchangeRateKey][dateKey] === undefined) {
+					exchangeRateData[exchangeRateKey][dateKey] = {
+						"open": element.open,
+						"close": element.close,
+						"low": element.low,
+						"high": element.high,
+						"volumefrom": element.volumefrom,
+						"volumeto": element.volumeto,
+						"source": "cryptocompare"
+					};
+				}
+			}
+
+
+			pFnCallback(data);
+		});
+	}
+}
+
+function SteemAccountHistoryHelper(pAccount, pStorage) {
+	var self = this;
+
+	self.account = pAccount;
+
+	var storage = pStorage;
+	var storageKey = 'steemit-accountHistory-' + pAccount;
+	var maxItemCount = 0;
+
+	function getFromStorage() {
+		var storageData = storage.getItem(storageKey);
+		if (storageData === undefined || storageData === null) {
+			storageData = { account: pAccount, account_history: [] };
+		} else {
+			storageData = JSON.parse(storageData);
+		}
+		return storageData;
+	}
+
+	function writeToStorage(pStorageData) {
+		storage.setItem(storageKey, JSON.stringify(pStorageData));
+	}
+
+	self.clearCache = function() {
+		storage.removeItem(storageKey);
+	}
+
+	self.updateAccountHistory = function(pSetProgress, pFnCallback) {
+		try {
+			var from = -1;
+			var limit = 1000;
+
+			var storageData = getFromStorage();
+
+			doGetAccountHistoryRecursive(self.account, from, limit, storageData.account_history.length-1, storageData.account_history, pSetProgress, (err,result) => {
+				if (result) {
+					writeToStorage(storageData);
+				}
+				pFnCallback(err, result);
+			});
+		} catch (error) {
+			alert(error);
+			console.log(error);
+		}
+	}
+
+	function doGetAccountHistoryRecursive(pAccount, pFrom, pLimit, pUpdateToIndex, pDataArray, pSetProgess, pFnCallback) {
+		var progressValue = 0;
+		console.log( 'requesting data for @' + pAccount + ' (' + pFrom + '/' + pLimit + ')');
+		if (pFrom == -1) {
+			progressValue = 0; 
+		} else if (pFrom <= pLimit) {
+			progressValue = 100;
+		} else {
+			progressValue = parseInt(((maxItemCount-pFrom)*100)/maxItemCount);
+		}
+		pSetProgess(progressValue, progressValue + '%');
+		steem.api.getAccountHistory(pAccount, pFrom, pLimit, function(err,result){
+			if (err){
+				console.error( JSON.stringify(err));
+				pFnCallback(err, null);
+				return;
+			}
+			if (result) {
+				var lastIndex = -1;
+				for (let index = 0; index < result.length; index++) {
+					const element = result[index];
+					const currentIndex = element[0];
+					if (currentIndex > maxItemCount) maxItemCount = currentIndex;
+					if (lastIndex === -1 || lastIndex > currentIndex) lastIndex = currentIndex;
+					if (pDataArray[currentIndex] === undefined) {
+						pDataArray[currentIndex] = element;
+					}
+				}
+				if (lastIndex > 0 && lastIndex > pUpdateToIndex) {
+					doGetAccountHistoryRecursive(pAccount, lastIndex, pLimit > lastIndex ? lastIndex : pLimit, pUpdateToIndex, pDataArray, pSetProgess, pFnCallback)
+				} else {
+					// finished
+					pSetProgess(100, "100%");
+					pFnCallback(null, pDataArray);
+				}
+			}
+		} );   
+	}
+
+	self.getClaims = function() {
+		var resultData = [];
+		var storageData = getFromStorage();
+		for (let index = 0; index < storageData.account_history.length; index++) {
+			const element = storageData.account_history[index];
+			var op = element[1] !== undefined ? element[1].op : null;
+			if (op !== null) {
+					// claim_reward_balance, transfer, transfer_to_vesting, transfer_to_savings , fill_order, withdraw_vesting, , interest, fill_convert_request, limit_order_cancel, return_vesting_delegation, etc.
+					if (op.length > 0 && (op[0] === 'claim_reward_balance' || op[0] === 'transfer')) {
+					resultData.push(element);
+				}
+			}
+		}
+		return resultData;
+	}
+}
+
+function downloadCSV(csv, filename) {
+    var csvFile;
+    var downloadLink;
+
+    // CSV file
+    csvFile = new Blob([csv], {type: "text/csv"});
+
+    // Download link
+    downloadLink = document.createElement("a");
+
+    // File name
+    downloadLink.download = filename;
+
+    // Create a link to the file
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+
+    // Hide download link
+    downloadLink.style.display = "none";
+
+    // Add the link to DOM
+    document.body.appendChild(downloadLink);
+
+    // Click download link
+    downloadLink.click();
+}
+
+</script>
+  </body>
+</html>
