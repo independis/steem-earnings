@@ -85,7 +85,7 @@ function main(pAccount) {
 		}
 
 		// write output complete
-		var html = shared.createHtmlOutput(accountValues);
+		var html = createHtmlDocumentOutputHeader() + shared.createHtmlOutput(accountValues) + createHtmlDocumentOutputFooter();
 		writeFile(outputPathPrefix + pAccount + '.html', html);
 		var csv = shared.createCsvOutputHeader() + shared.createCsvOutput(accountValues);
 		writeFile(outputPathPrefix + pAccount + '.csv', csv);	
