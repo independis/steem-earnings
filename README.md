@@ -27,8 +27,21 @@ node get-claimed-rewards.js schererf
 ```
 
 The following files will be created:
-- get-claimed-rewards.js-schererf.html
-- get-claimed-rewards.js-schererf.csv
+- steemit-earnings.js-schererf.html
+- steemit-earnings.js-schererf.csv
+- steemit-earnings-schererf-cointracking.csv
+
+#### HTML
+
+The HTML file contains a formatted table that includes all rewards and transfer of the specified account.
+
+#### CSV
+
+The CSV file contains a list of all rewards and transfer of the specified account. This file provides a optimal basis for further processing with a spreadsheet software like Excel.
+
+#### COINTRACKING CSV
+
+The CSV file contains a list of all rewards and transfer of the specified account. You can use this file to import your steem transactions to CoinTracking (https://cointracking.info/import/import_csv/).
 
 ## Offline HTML UI for getting claimed rewards and transfers directly from your browser
 
@@ -37,7 +50,7 @@ Using the 'ui/steemit-earnings.html' enables you to get your steemit earnings wi
 1. Open the 'ui/steemit-earnings.html' HTML file directly with the browser of your choice
 2. The UI first tries to update the underlying exchange rates. The steem/mvest-values are not updated automatically because of CORS the access to 'steemd.com/api/props' is denied for the browser. 
 3. Enter the steemit account name and click 'get earnings' to load the claimed_rewards and transfers of the account
-4. The steemit earnings are shown directly in the browser and a csv file is created automatically for download.
+4. The steemit earnings are shown directly in the browser and two csv files are created automatically for download.
 
 ## Update included exchange-rate and steem/mvests data via nodejs
 
