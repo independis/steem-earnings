@@ -136,6 +136,7 @@ function doIt() {
 					cryptoCompareHelper.getExchangeRate);
 				doHtml(accountValues);
 				exportTableToCSV(accountValues, pAccount + ".csv");
+				exportCointrackingToCSV(accountValues, pAccount + "-cointracking.csv")
 			}
 		});
 	} catch (error) {
@@ -147,6 +148,16 @@ function exportTableToCSV(accountValues, filename) {
 	try {
 		// Create and Download CSV file
 		var csv = window.shared.createCsvOutputHeader() + window.shared.createCsvOutput(accountValues);
+		downloadCSV(csv, filename);
+	} catch (error) {
+		divResults.innerText = error;
+	}
+}
+
+function exportCointrackingToCSV(accountValues, filename) {
+	try {
+		// Create and Download CSV file
+		var csv = window.shared.createCointrackingCsvOutput(accountValues);
 		downloadCSV(csv, filename);
 	} catch (error) {
 		divResults.innerText = error;

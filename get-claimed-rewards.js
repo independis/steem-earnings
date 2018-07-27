@@ -82,6 +82,8 @@ function main(pAccount) {
 			writeFile(outputPathPrefix + pAccount + '-' + year + '.html', html);
 			var csv = shared.createCsvOutputHeader() + shared.createCsvOutput(accountValues, year);
 			writeFile(outputPathPrefix + pAccount + '-' + year + '.csv', csv);	
+			var csv = shared.createCointrackingCsvOutput(accountValues, year);
+			writeFile(outputPathPrefix + pAccount + '-cointracking-' + year + '.csv', csv);	
 		}
 
 		// write output complete
