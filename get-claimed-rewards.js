@@ -28,7 +28,7 @@ function createHtmlDocumentOutputHeader() {
 	htmlFragement += '<head>\n';
 	htmlFragement += '<meta charset="utf-8">\n';
 	htmlFragement += '<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">\n';
-	htmlFragement += '<title>steemit earnings</title>\n';
+	htmlFragement += '<title>steem earnings</title>\n';
 	htmlFragement += '<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">\n';
 	htmlFragement += '<style type="text/css">\n';
 	htmlFragement += '.table { font-size:0.75rem; padding:0.1rem; }\n';
