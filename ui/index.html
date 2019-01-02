@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
-	<title>steem earnings v0.6.0</title>
+	<title>steem earnings v0.7.0</title>
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
 
@@ -42,7 +42,7 @@
   }
 	</style>
 
-	<title>steem earnings v0.6.0</title>
+	<title>steem earnings v0.7.0</title>
   </head>
   <body class="bg-light center-block">
     <div class="container" style="max-width:98%;">
@@ -53,7 +53,7 @@
 		</div>
 
 		<div class="row">
-			<div class="col-8">
+			<div class="col-4">
 					<div class="input-group">
 						<div class="input-group-prepend">
 						  <span class="input-group-text">@</span>
@@ -62,6 +62,16 @@
 						<div class="invalid-feedback" style="width: 100%;">
 						  Your username is required.
 						</div>
+					</div>
+			</div>
+			<div class="col-4">
+					<div class="input-group">
+						<div class="input-group-prepend">
+							<span class="input-group-text">steem node URL</span>
+						</div>
+						<!-- https://gtg.steem.house:8090 ; https://api.steemit.com-->
+						<input type="text" class="form-control" id="tbUrl" value="https://api.steemit.com" placeholder="schererf" required>
+						<div class="invalid-feedback" style="width: 100%;">URL is required.</div>
 					</div>
 			</div>
 			<div class="col-4">
@@ -91,10 +101,6 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
 <script>
 
-//steem.api.setOptions({ url: 'https://api.steemit.com' });
-steem.api.setOptions({ url: 'https://gtg.steem.house:8090' });
-//steem.api.setOptions({ url: 'https://rpc.steemviz.com' });
-
 setProgressbar(50, 'SBD-BTC');
 var cryptoCompareHelper = new CryptoCompareHelper();
 cryptoCompareHelper.dailyPriceHistorical('SBD-BTC', 'SBD*', 'BTC', function(data) {
@@ -117,26 +123,35 @@ function doIt() {
 		var divResults = document.getElementById("divResults");
 		divResults.innerText = new Date();
 
+		// set steem node url
+		var tbUrl = document.getElementById("tbUrl");
+		var pUrl = tbUrl.value;
+		steem.api.setOptions({ url: pUrl });
+
 		// update AccountHistory
 		if (steemAccountHistoryHelper != null) {
 			steemAccountHistoryHelper.clearCache();
 		}
 		steemAccountHistoryHelper = new SteemAccountHistoryHelper(pAccount, storage);
 		steemAccountHistoryHelper.updateAccountHistory(setProgressbar, (err, result) =>{
-			if (err){
-				alert(err);
-				return;
-			} 
-			if (result) {
-				// get account value
-				var accountValues = window.shared.getAccountValue(
-					pAccount, 
-					steemAccountHistoryHelper.getClaims(), 
-					getSteemPerMVestForDate, 
-					cryptoCompareHelper.getExchangeRate);
-				doHtml(accountValues);
-				exportTableToCSV(accountValues, pAccount + ".csv");
-				exportCointrackingToCSV(accountValues, pAccount + "-cointracking.csv")
+			try {
+				if (err){
+					alert(err);
+					return;
+				} 
+				if (result) {
+					// get account value
+					var accountValues = window.shared.getAccountValue(
+						pAccount, 
+						steemAccountHistoryHelper.getClaims(), 
+						getSteemPerMVestForDate, 
+						cryptoCompareHelper.getExchangeRate);
+					doHtml(accountValues);
+					exportTableToCSV(accountValues, pAccount + ".csv");
+					exportCointrackingToCSV(accountValues, pAccount + "-cointracking.csv")
+				}
+			} catch (error2) {
+				alert(error2);
 			}
 		});
 	} catch (error) {
