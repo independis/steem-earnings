@@ -3,8 +3,8 @@
   "author": {
     "name": "SchererF"
   },
-  "name": "steemit-earnings",
-  "description": "get steemit earnings",
+  "name": "steem-earnings",
+  "description": "get steem earnings",
   "repository": {},
   "license": "UNLICENSED",
   "dependencies": {

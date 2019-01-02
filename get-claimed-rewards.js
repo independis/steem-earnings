@@ -75,7 +75,7 @@ function main(pAccount) {
 		if (!fs.existsSync(outputFolder)){
 			fs.mkdirSync(outputFolder);
 		}
-		var outputPathPrefix = outputFolder + '/steemit-earnings-';
+		var outputPathPrefix = outputFolder + '/steem-earnings-';
 		var currentYear = new Date().getUTCFullYear();
 		for (var year=2016; year <= currentYear; year++) {
 			var html = createHtmlDocumentOutputHeader() + shared.createHtmlOutput(accountValues, year) + createHtmlDocumentOutputFooter();
