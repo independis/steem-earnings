@@ -402,7 +402,11 @@ function SteemAccountHistoryHelper(pAccount, pStorage) {
 			var op = element[1] !== undefined ? element[1].op : null;
 			if (op !== null) {
 					// claim_reward_balance, transfer, transfer_to_vesting, transfer_to_savings , fill_order, withdraw_vesting, , interest, fill_convert_request, limit_order_cancel, return_vesting_delegation, etc.
-					if (op.length > 0 && (op[0] === 'claim_reward_balance' || op[0] === 'transfer')) {
+					if (op.length > 0 && 
+						(op[0] === 'claim_reward_balance' || 
+						op[0] === 'transfer' || 
+						op[0] === 'author_reward' ||
+						op[0] === 'fill_order')) {
 					resultData.push(element);
 				}
 			}
